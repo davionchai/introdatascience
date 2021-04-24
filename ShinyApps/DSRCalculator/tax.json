@@ -1,0 +1,18 @@
+{
+    "country": "malaysia",
+    "year": 2021,
+    "bracket": [
+        {"income": 0, "pcb": 0, "excess": 0},
+        {"income": 5000, "pcb": 0, "excess": 0.01},
+        {"income": 20000, "pcb": 150, "excess": 0.03},
+        {"income": 35000, "pcb": 600, "excess": 0.08},
+        {"income": 50000, "pcb": 1800, "excess": 0.13},
+        {"income": 70000, "pcb": 4400, "excess": 0.21},
+        {"income": 100000, "pcb": 10700, "excess": 0.24},  
+        {"income": 250000, "pcb": 46700, "excess": 0.245},
+        {"income": 400000, "pcb": 83540, "excess": 0.25},
+        {"income": 600000, "pcb": 133450, "excess": 0.26},
+        {"income": 1000000, "pcb": 237450, "excess": 0.28},
+        {"income": 2000000, "pcb": 517450, "excess": 0.30}
+    ]
+}
