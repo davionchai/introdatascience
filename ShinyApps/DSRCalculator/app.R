@@ -18,10 +18,24 @@ ui <- fluidPage(
             width=4,
             # Loan application
             numericInput(
-                inputId = "loan",
-                label = "Amount of Loan to Apply",
+                inputId = "loanAmount",
+                label = "Amount of Loan to Apply (RM)",
                 value = 0,
                 min = 0
+            ),
+            numericInput(
+                inputId = "loanRate",
+                label = "Rate of Loan in Percentage (%)",
+                value = 0,
+                min = 0,
+                max = 100
+            ),
+            numericInput(
+                inputId = "loanDuration",
+                label = "Duration of Loan (Years)",
+                value = 0,
+                min = 0,
+                max = 100
             ),
             # Income input section
             tags$p("Input your latest 3 months income below."),
@@ -29,21 +43,21 @@ ui <- fluidPage(
             tags$p("Note: Order does not matter."),
             numericInput(
                inputId = "income1",
-               label = "Income 1",
+               label = "Income 1 (RM)",
                value = 0,
                min = 0
             ),
             div(style="margin-top:-10px"),
             numericInput(
                inputId = "income2",
-               label = "Income 2",
+               label = "Income 2 (RM)",
                value = 0,
                min = 0
             ),
             div(style="margin-top:-10px"),
             numericInput(
                inputId = "income3",
-               label = "Income 3",
+               label = "Income 3 (RM)",
                value = 0,
                min = 0
             ),
@@ -80,9 +94,12 @@ ui <- fluidPage(
             ),
             splitLayout(cellWidths=c("auto", "auto"),
                 disabled(textInput("outputPreDSR","DSR Before Loan in Percentage (%)", "Pending Input")),
-                disabled(textInput("outputPostDSR", "DSR After Loan in Percentage (%)", "Pending Input"))
+                disabled(numericInput("outputRepayment", "Loan Monthly Repayment (RM)", 0))
             ),
-            disabled(textInput("score", "Suggested Application Result (Below 40%)", "Pending Input"))
+            splitLayout(cellWidths=c("auto", "auto"),
+                disabled(textInput("outputPostDSR", "DSR After Loan in Percentage (%)", "Pending Input")),
+                disabled(textInput("score", "Suggested Application Result (Below 40%)", "Pending Input"))
+            )
         )
     ),
     tags$hr(),
@@ -93,7 +110,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
     eventListener <- reactive({
-        list(input$loan, input$income1, input$income2, input$income3, input$commitment, input$epf);
+        list(input$loanAmount, input$loanRate, input$loanDuration, input$income1, input$income2, input$income3, input$commitment, input$epf);
     });
     observeEvent(eventListener(),{
         # Update annual gross
@@ -114,18 +131,25 @@ server <- function(input, output, session) {
         # Update annual net
         net <- gross-tax-commitment-epf-socso;
         updateNumericInput(session, "outputNet", value=net);
+        # Update loan repayment
+        repayment <- repayment_month(input$loanAmount, input$loanRate, input$loanDuration);
+        updateNumericInput(session, "outputRepayment", value=repayment);
         # Update DSR before loan
         preDSR <- dsr_before(commitment, net);
         updateTextInput(session, "outputPreDSR", value=preDSR);
-        # Update DSR after loan
-        postDSR <- dsr_after(commitment, input$loan, net);
+        # # Update DSR after loan
+        postDSR <- dsr_after(commitment, repayment, net);
         updateTextInput(session, "outputPostDSR", value=postDSR);
         # Update Scoring
-        updateTextInput(session, "score", value=dsr_score(postDSR))
+        updateTextInput(session, "score", value=dsr_score(postDSR));
         }
     );
     # Worker to calculate tax payable --- incomplete need to load json
     deductible <- function(gross) {
+        # error capture
+        if (is.na(gross)){
+            gross=0;
+        };
         # Capture index
         tax_index <- 0;
         for (bracket_income in bracket_incomes) {
@@ -153,20 +177,30 @@ server <- function(input, output, session) {
     };
     # Worker on DSR before
     dsr_before <- function(commitment, net) {
-        if (is.na(commitment/net)) {
-            return("Pending Input");
+        if (!(commitment/net) || is.na(commitment/net)) {
+            return(0);
         } else if (commitment/net > 0 & commitment/net < Inf) {
             return(round(commitment/net*100, 2))
         } else {
             return("Invalid Application");
         };
     };
+    # Worker to calculate monthly repayment
+    repayment_month <- function(amount, rate, years) {
+        if ((!amount || is.na(amount)) || (!rate || is.na(rate))|| (!years || is.na(years))) {
+            return(0);
+        } else {
+            r <- rate/100/12;
+            n <- years*12;
+            return(round(amount*r*(1+r)**n/((1+r)**n-1), 2));
+        };
+    };
     # Worker on DSR after
-    dsr_after <- function(commitment, loan, net) {
-        if (is.na((commitment+loan)/net)) {
-            return("Pending Input");
-        } else if ((commitment+loan)/net > 0 & (commitment+loan)/net < Inf ) {
-            return(round((commitment+loan)/net*100, 2));
+    dsr_after <- function(commitment, repayment, net) {
+        if (!((commitment+repayment)/net) || is.na((commitment+repayment)/net)) {
+            return(0);
+        } else if ((commitment+repayment)/net > 0 & (commitment+repayment)/net < Inf ) {
+            return(round((commitment+repayment)/net*100, 2));
         } else {
             return("Invalid Application");
         };
