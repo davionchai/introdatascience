@@ -113,17 +113,26 @@ server <- function(input, output, session) {
         list(input$loanAmount, input$loanRate, input$loanDuration, input$income1, input$income2, input$income3, input$commitment, input$epf);
     });
     observeEvent(eventListener(),{
+        # Variable doctor
+        loanAmount <- ifelse(is.na(input$loanAmount) || input$loanAmount < 0, 0, input$loanAmount);
+        loanRate <- ifelse(is.na(input$loanRate) || input$loanRate < 0, 0, input$loanRate);
+        loanDuration <- ifelse(is.na(input$loanDuration) || input$loanDuration < 0, 0, input$loanDuration);
+        income1 <- ifelse(is.na(input$income1) || input$income1 < 0, 0, input$income1);
+        income2 <- ifelse(is.na(input$income2) || input$income2 < 0, 0, input$income2);
+        income3 <- ifelse(is.na(input$income3) || input$income3 < 0, 0, input$income3);
+        commitment <- ifelse(is.na(input$commitment) || input$commitment < 0, 0, input$commitment);
+        epf <- ifelse(is.na(input$epf) || input$epf < 0, 0, input$epf);
         # Update annual gross
-        gross <- round((input$income1+input$income2+input$income3)*4, 2);
+        gross <- round((income1+income2+income3)*4, 2);
         updateNumericInput(session, "outputGross", value=gross);
         # Update tax payable
         tax <- round(deductible(gross), 2);
         updateNumericInput(session, "outputTax", value=tax);
         # Update Commitment
-        commitment <- round(input$commitment*12, 2);
+        commitment <- round(commitment*12, 2);
         updateNumericInput(session, "outputCommitment", value=commitment);
         # Update EPF
-        epf <- round(epf_contribution(gross, input$epf), 2); 
+        epf <- round(epf_contribution(gross, epf), 2); 
         updateNumericInput(session, "outputEPF", value=epf);
         # Update socso
         socso <- round(socso_contribution(gross), 2);
@@ -132,7 +141,7 @@ server <- function(input, output, session) {
         net <- gross-tax-commitment-epf-socso;
         updateNumericInput(session, "outputNet", value=net);
         # Update loan repayment
-        repayment <- repayment_month(input$loanAmount, input$loanRate, input$loanDuration);
+        repayment <- repayment_month(loanAmount, loanRate, loanDuration);
         updateNumericInput(session, "outputRepayment", value=repayment);
         # Update DSR before loan
         preDSR <- dsr_before(commitment, net);
@@ -146,10 +155,6 @@ server <- function(input, output, session) {
     );
     # Worker to calculate tax payable --- incomplete need to load json
     deductible <- function(gross) {
-        # error capture
-        if (is.na(gross)){
-            gross=0;
-        };
         # Capture index
         tax_index <- 0;
         for (bracket_income in bracket_incomes) {
@@ -163,7 +168,6 @@ server <- function(input, output, session) {
         income <- tax.json$bracket$income[tax_index];
         pcb <- tax.json$bracket$pcb[tax_index];
         rate <- tax.json$bracket$excess[tax_index];
-        # excess <- (gross - deducted) * tax.json(1)
         return(pcb+((gross-income)*rate));
     };
     # Worker to calculate epf
@@ -177,17 +181,18 @@ server <- function(input, output, session) {
     };
     # Worker on DSR before
     dsr_before <- function(commitment, net) {
-        if (!(commitment/net) || is.na(commitment/net)) {
+        dsr <- commitment/net;
+        if (!dsr || is.na(dsr)) {
             return(0);
-        } else if (commitment/net > 0 & commitment/net < Inf) {
-            return(round(commitment/net*100, 2))
+        } else if (dsr > 0 & dsr < Inf) {
+            return(round(dsr*100, 2));
         } else {
             return("Invalid Application");
         };
     };
     # Worker to calculate monthly repayment
     repayment_month <- function(amount, rate, years) {
-        if ((!amount || is.na(amount)) || (!rate || is.na(rate))|| (!years || is.na(years))) {
+        if (!amount || !rate || !years) {
             return(0);
         } else {
             r <- rate/100/12;
@@ -197,19 +202,20 @@ server <- function(input, output, session) {
     };
     # Worker on DSR after
     dsr_after <- function(commitment, repayment, net) {
-        if (!((commitment+repayment)/net) || is.na((commitment+repayment)/net)) {
+        dsr <- (commitment+repayment)/net;
+        if (!dsr || is.na(dsr)) {
             return(0);
-        } else if ((commitment+repayment)/net > 0 & (commitment+repayment)/net < Inf ) {
-            return(round((commitment+repayment)/net*100, 2));
+        } else if (dsr > 0 & dsr < Inf) {
+            return(round(dsr*100, 2));
         } else {
             return("Invalid Application");
         };
     };
     # Worker to score if application is good or bad
     dsr_score <- function(DSR) {
-        recommended <- 40;
+    recommended <- 40;
         if (!is.numeric(DSR)) {
-            return("Pending Input");
+            return("Pending Correction");
         } else if (DSR <= recommended) {
             return("Good Application");
         } else {
